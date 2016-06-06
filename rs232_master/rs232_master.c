@@ -1,11 +1,11 @@
 /* Note: linux error number http://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html */
-#include <linux/modules.h>
+#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/slab.h> /* kmalloc, kfree */
-#include <errno.h>
+#include <linux/net.h>
 #include <net/sock.h>
 #include <net/tcp.h>
 
@@ -33,7 +33,7 @@ static struct file_operations fops = {
 	.owner = THIS_MODULE,
 	.open = rs232_master_open,
 	.release = rs232_master_close
-}
+};
 
 /* Some device variable */
 static struct class* dev_class;
@@ -105,7 +105,7 @@ alloc_chrdev_region_fail:
 
 }
 
-static void __exit rs232_master_close(void) {
+static void __exit rs232_master_final(void) {
 	kfree(kernel_data);
 	cdev_del(&cdev);
 	device_destroy(dev_class, dev_no);
@@ -114,13 +114,13 @@ static void __exit rs232_master_close(void) {
 	printk(KERN_INFO "[%s] Release done\n", DEVICE_NAME);
 }
 module_init(rs232_master_init);
-module_exit(rs232_master_close);
+module_exit(rs232_master_final);
 
 /** Open connection with slave device through kernel socket follow this procedure:
- * create server size kernel socket
- * bind server socket to specific port
- * server socket list to that port
- * create client socket and wait fot its connection
+ *  create server size kernel socket
+ *  bind server socket to specific port
+ *  server socket list to that port
+ *  create client socket and wait fot its connection
  */
 static int open_connection(unsigned short port) {
 	int ret;
@@ -128,19 +128,19 @@ static int open_connection(unsigned short port) {
 	struct sockaddr_in saddr;
 	memset(&saddr, 0, sizeof(saddr));
 
-	if((ret = sock_create_kern(AF_INET, SOCK_STREAM, IPPORTO_TCP, &server_socket)) < 0) {
-		printk(KERN_ERR "[%s] socket_create_kern fail, return %d\n", DEVICE_NAME, ret);
-		goto socket_create_kern_fail;
+	if((ret = sock_create_kern(AF_INET, SOCK_STREAM, IPPROTO_TCP, &server_socket)) < 0) {
+		printk(KERN_ERR "[%s] sock_create_kern fail, return %d\n", DEVICE_NAME, ret);
+		goto sock_create_kern_fail;
 	}
 	if((ret = kernel_setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (char*)&val, sizeof(val))) < 0) {
-		printk(KERN_ERR, "[%s] kernel_setsockopt fail, return %d\n", DEVICE_NAME, ret);
+		printk(KERN_ERR "[%s] kernel_setsockopt fail, return %d\n", DEVICE_NAME, ret);
 		goto kernel_setsockopt_fail;
 	}
 	saddr.sin_family = AF_INET;
     saddr.sin_port = htons(port);
     saddr.sin_addr.s_addr = INADDR_ANY;
     /* Bind and listen to port you want */
-    if((ret = server_socket->ops->bind(server_socket, (struct sockaddr_in*)&saddr, sizeof(saddr))) < 0) {
+    if((ret = server_socket->ops->bind(server_socket, (struct sockaddr*)&saddr, sizeof(saddr))) < 0) {
     	printk(KERN_ERR "[%s] kernel socket bind fail, return %d\n", DEVICE_NAME, ret);
     	goto bind_fail;
     }
@@ -149,8 +149,8 @@ static int open_connection(unsigned short port) {
     	goto listen_fail;
     }
     /* Create kernel socket for slave device(client) and for its connection */
-    if((ret = socket_create_kern(AF_INET, SOCK_STREAM, IPPORTO_TCP, &client_socket)) < 0) {
-    	printk(KERN_ERR "[%s] socket_create_kern fail, return %d\n", DEVICE_NAME, ret);
+    if((ret = sock_create_kern(AF_INET, SOCK_STREAM, IPPROTO_TCP, &client_socket)) < 0) {
+    	printk(KERN_ERR "[%s] sock_create_kern fail, return %d\n", DEVICE_NAME, ret);
     	goto client_socket_create_fail;
     }
     if((ret = server_socket->ops->accept(server_socket, client_socket, 0)) < 0) {
@@ -166,7 +166,7 @@ listen_fail:
 bind_fail:
 kernel_setsockopt_fail:
 	sock_release(server_socket);
-socket_create_kern_fail:
+sock_create_kern_fail:
 	return ret;
 }
 static int close_connection(void) {
@@ -186,18 +186,18 @@ static ssize_t send(struct socket* client_socket, char* buf, size_t size) {
 	iov.iov_base = buf;
 	iov.iov_len = size;
 
-	msg.msg_name = NULL;
-    msg.msg_namelen = 0;
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
+	msg_header.msg_name = NULL;
+	msg_header.msg_namelen = 0;
+	msg_header.msg_iov = &iov;
+	msg_header.msg_iovlen = 1;
+	msg_header.msg_control = NULL;
+	msg_header.msg_controllen = 0;
+	msg_header.msg_flags = 0;
 
-    old_fs = get_fs();
-    set_fs(KERNEL_DS);
-    ret = sock_sendmsg(client_socket, &msg_header, size);
-    set_fs(old_fs);
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	ret = sock_sendmsg(client_socket, &msg_header, size);
+	set_fs(old_fs);
 
-    return ret;
+	return ret;
 }
