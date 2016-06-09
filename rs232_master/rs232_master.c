@@ -18,7 +18,7 @@
 MODULE_LICENSE("GPL");
 
 static int __init rs232_master_init(void);
-static void __exit rs232_master_exit(void);
+static void __exit rs232_master_final(void);
 
 /* File operations */
 static int rs232_master_open(struct inode *inode, struct file *filp);
@@ -43,6 +43,12 @@ static struct cdev cdev;
 static char* kernel_data; /* Allocate by kmalloc, free by kfree */
 static struct socket* client_socket; /* Server side kernel socket */
 static struct socket* server_socket; /* Client side kernel socket */
+
+static size_t device_ref_count; /* Device reference count, record how many time this device been opened */
+static size_t data_len;
+static size_t unflush_index;
+
+DEFINE_SEMAPHORE(device_mutex);
 
 /** Create character device follow this procedure:
  * 	Register device number by alloc_chrdev_region
@@ -84,7 +90,7 @@ static int __init rs232_master_init(void) {
 	 * we need memory allocation for the device which is done as follow */
 	if((kernel_data = kmalloc(65535, GFP_KERNEL)) == NULL) {
 		printk(KERN_ERR "[%s] kmalloc fail\n", DEVICE_NAME);
-		ret = ENOMEM;
+		ret = -ENOMEM;
 		goto kmalloc_fail;
 	}
 	printk(KERN_INFO "[%s] Initailization done\n", DEVICE_NAME);
@@ -116,11 +122,59 @@ static void __exit rs232_master_final(void) {
 module_init(rs232_master_init);
 module_exit(rs232_master_final);
 
+static int rs232_master_open(struct inode* inode, struct file* filp) {
+	int ret;
+
+	/* Lock critical section */
+	if(down_interruptible(&device_mutex)) {
+		printk(KERN_ERR "[%s] In rs232_master_open down_interruptible fail.\n", DEVICE_NAME);
+		ret = -ERESTARTSYS; /* If down_interruptible fail, it'll return this value */
+		goto down_interruptible_fail;
+	}
+	/* If this is first time open this device, initialize some needed variable */
+	if(device_ref_count == 0) {
+		data_len = 0;
+		unflush_index = 0;
+		/* TODO open the connection with slave devece */
+	}
+	device_ref_count++;
+	printk(KERN_INFO "[%s] open success\n", DEVICE_NAME);
+	up(&device_mutex);
+	return 0;
+
+down_interruptible_fail:
+	return ret;
+}
+
+static int rs232_master_close(struct inode* inode, struct file* filp) {
+	int ret;
+
+	/* Lock critical section */
+	if(down_interruptible(&device_mutex)) {
+		printk(KERN_ERR "[%s] In rs232_master_close down_interruptible fail.\n", DEVICE_NAME);
+		ret = -ERESTARTSYS;
+		goto down_interruptible_fail;
+	}
+	/* If this is the last close, send all the unsend data to slave device
+	   immediately and close */
+	if(device_ref_count == 1) {
+		/* TODO Send the data to slave */
+		/* TODO close the connection with slave device */
+	}
+	printk(KERN_INFO "[%s] close success\n", DEVICE_NAME);
+	device_ref_count--;
+	up(&device_mutex);
+	return 0;
+
+down_interruptible_fail:
+	return ret;
+}
+
 /** Open connection with slave device through kernel socket follow this procedure:
- *  create server size kernel socket
- *  bind server socket to specific port
- *  server socket list to that port
- *  create client socket and wait fot its connection
+ *  1. Create server kernel socket
+ *  2. Bind server socket to specific port
+ *  3. Server socket listen to that port
+ *  4. Create client socket and wait fot its connection
  */
 static int open_connection(unsigned short port) {
 	int ret;
