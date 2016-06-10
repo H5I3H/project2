@@ -29,18 +29,19 @@ __attribute__((section("__versions"))) = {
 	{ 0x42109b92, __VMLINUX_SYMBOL_STR(device_create) },
 	{ 0xb71ff8b9, __VMLINUX_SYMBOL_STR(__class_create) },
 	{ 0x29537c9e, __VMLINUX_SYMBOL_STR(alloc_chrdev_region) },
-	{ 0x4f8b5ddb, __VMLINUX_SYMBOL_STR(_copy_to_user) },
 	{ 0xf0fdf6cb, __VMLINUX_SYMBOL_STR(__stack_chk_fail) },
-	{ 0x7878086, __VMLINUX_SYMBOL_STR(sock_release) },
 	{ 0x75c72c3c, __VMLINUX_SYMBOL_STR(kernel_setsockopt) },
 	{ 0x7a369eee, __VMLINUX_SYMBOL_STR(sock_create_kern) },
-	{ 0x6729d3df, __VMLINUX_SYMBOL_STR(__get_user_4) },
-	{ 0x6d334118, __VMLINUX_SYMBOL_STR(__get_user_8) },
+	{ 0x4f6b400b, __VMLINUX_SYMBOL_STR(_copy_from_user) },
+	{ 0xaadfc111, __VMLINUX_SYMBOL_STR(remap_pfn_range) },
+	{ 0x4c9d28b0, __VMLINUX_SYMBOL_STR(phys_base) },
+	{ 0x7878086, __VMLINUX_SYMBOL_STR(sock_release) },
 	{ 0x71e3cecb, __VMLINUX_SYMBOL_STR(up) },
-	{ 0x27e1a049, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0xf22449ae, __VMLINUX_SYMBOL_STR(down_interruptible) },
-	{ 0x5807d4fa, __VMLINUX_SYMBOL_STR(sock_recvmsg) },
+	{ 0x6d334118, __VMLINUX_SYMBOL_STR(__get_user_8) },
+	{ 0x5aedf1dc, __VMLINUX_SYMBOL_STR(sock_sendmsg) },
 	{ 0x4c4fef19, __VMLINUX_SYMBOL_STR(kernel_stack) },
+	{ 0x27e1a049, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0xbdfb6dbb, __VMLINUX_SYMBOL_STR(__fentry__) },
 };
 
@@ -50,4 +51,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "85AD0C49E49ACC796B20419");
+MODULE_INFO(srcversion, "3ED09B46A3708004A2DBE90");

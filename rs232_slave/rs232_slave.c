@@ -244,8 +244,8 @@ receive_from_master_failed:
 
 static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t count, loff_t *offp )
 {
-	int ret;
-	size_t total;
+	int ret=0;
+	size_t total=0;
 	size_t read_len;
 	int is_eof;
 
