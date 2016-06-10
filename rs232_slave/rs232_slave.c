@@ -13,7 +13,7 @@
 #include <asm/atomic.h>
 
 #define RS232_SLAVE_DATA_SIZE 65536
-#define RS232_SLAVE_CONNECT_PORT 9527
+#define RS232_SLAVE_CONNECT_PORT 9999
 
 #define RS232_SLAVE_IOC_MAGIC	's'  //  choose one number after consulting ioctl-number.txt
 #define RS232_SLAVE_OPENCONN	_IOW(RS232_SLAVE_IOC_MAGIC, 0, unsigned int)
