@@ -31,8 +31,8 @@ static ssize_t send(struct socket* client_socket, char* buf, size_t size);
 
 static struct file_operations fops = {
 	.owner = THIS_MODULE,
-	.open = rs232_master_open,
-	.release = rs232_master_close
+	//.open = rs232_master_open,
+	//.release = rs232_master_close
 };
 
 /* Some device variable */
