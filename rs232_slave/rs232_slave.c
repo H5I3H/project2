@@ -11,13 +11,9 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <asm/atomic.h>
-<<<<<<< HEAD
-
+#include "rs232_slave.h"
 
 MODULE_LICENSE("GPL");
-=======
-#include "rs232_slave.h"
->>>>>>> 71ac4efbd8f595a357c7d79daf27caebb07a6128
 
 #ifndef VM_RESERVED
 # define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
