@@ -1,0 +1,6 @@
+rs232_slave/rs232_slave.ko
+rs232_slave/rs232_slave.mod.*
+rs232_slave/*.o
+rs232_slave/rs232_slave.o
+rs232_slave/modules.order
+rs232_slave/Module.symvers
