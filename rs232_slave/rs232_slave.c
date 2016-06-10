@@ -12,14 +12,8 @@
 #include <net/tcp.h>
 #include <asm/atomic.h>
 
-#define RS232_SLAVE_DATA_SIZE 65536
-#define RS232_SLAVE_CONNECT_PORT 9999
 
-#define RS232_SLAVE_IOC_MAGIC	's'  //  choose one number after consulting ioctl-number.txt
-#define RS232_SLAVE_OPENCONN	_IOW(RS232_SLAVE_IOC_MAGIC, 0, unsigned int)
-#define RS232_SLAVE_CLOSECONN	_IO(RS232_SLAVE_IOC_MAGIC, 1)
-#define RS232_SLAVE_RECEIVEFROMMASTER	_IOW(RS232_SLAVE_IOC_MAGIC, 0, size_t)
-
+MODULE_LICENSE("GPL");
 
 #ifndef VM_RESERVED
 # define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
@@ -244,8 +238,8 @@ receive_from_master_failed:
 
 static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t count, loff_t *offp )
 {
-	int ret=0;
-	size_t total=0;
+	int ret;
+	size_t total;
 	size_t read_len;
 	int is_eof;
 
@@ -259,6 +253,9 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 		up(&dev_mutex);
 		goto out;
 	}
+
+	total = 0;
+	is_eof = 0;
 	while ( count > 0) {
 		if ( data_len == 0) {
 			while ( data_len < RS232_SLAVE_DATA_SIZE ) {
@@ -293,9 +290,8 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 		if (is_eof)
 			break;
 	}
-	total = 0;
-	is_eof = 0;
-
+	ret = (long)total;
+        up(&dev_mutex);	
 out:
 	return ret;
 
