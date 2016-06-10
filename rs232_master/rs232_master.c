@@ -8,8 +8,7 @@
 #include <linux/net.h>
 #include <net/sock.h>
 #include <net/tcp.h>
-
-#define DEVICE_NAME "rs232_master"
+#include "rs232_master.h"
 
 #ifndef VM_RESERVED
 #define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
@@ -25,6 +24,7 @@ static int rs232_master_open(struct inode *inode, struct file *filp);
 static int rs232_master_close(struct inode *inode, struct file *filp);
 static ssize_t rs232_master_write(struct file* filp, const char __user *buff, size_t data_size, loff_t* offp);
 static int rs232_master_mmap(struct file* filp, struct vm_area_struct* vma);
+static long rs232_master_ioctl(struct file* filp, unsigned int ioctl_num, unsigned long param);
 
 static void vma_open(struct vm_area_struct* vma);
 static void vma_close(struct vm_area_struct* vma);
@@ -40,6 +40,7 @@ static struct file_operations fops = {
 	.release = rs232_master_close,
 	.write = rs232_master_write,
 	.mmap = rs232_master_mmap,
+	.unlocked_ioctl = rs232_master_ioctl,
 };
 
 /* Some device variable */
@@ -103,7 +104,7 @@ static int __init rs232_master_init(void) {
 	
 	/* Since our deivce will have read or write file operations, 
 	 * we need memory allocation for the device which is done as follow */
-	if((kernel_buff = kmalloc(65536, GFP_KERNEL)) == NULL) {
+	if((kernel_buff = kmalloc(RS232_MASTER_BUF_SIZE, GFP_KERNEL)) == NULL) {
 		printk(KERN_ERR "[%s] kmalloc fail\n", DEVICE_NAME);
 		ret = -ENOMEM;
 		goto kmalloc_fail;
@@ -151,13 +152,12 @@ static int rs232_master_open(struct inode* inode, struct file* filp) {
 	if(device_ref_count == 0) {
 		datalen_in_kern_buf = 0;
 		unflush_index = 0;
-		if((ret = open_connection(9999)) < 0) {
+		if((ret = open_connection(LISTEN_PORT)) < 0) {
 			printk(KERN_ERR "[%s] open_connection fail, reutrn %d.\n", DEVICE_NAME, ret);
 			goto open_connection_fail;
 		}
 	}
 	device_ref_count++;
-	printk(KERN_INFO "[%s] open success\n", DEVICE_NAME);
 	up(&device_mutex);
 	return 0;
 
@@ -179,18 +179,26 @@ static int rs232_master_close(struct inode* inode, struct file* filp) {
 	/* If this is the last close, send all the unsend data to slave device
 	   immediately and close */
 	if(device_ref_count == 1) {
-		/* TODO Send the unsended data to slave */
+		while(datalen_in_kern_buf > 0) {
+			if((ret = send(client_socket, &kernel_buff[unflush_index], datalen_in_kern_buf)) < 0) {
+				printk(KERN_ERR "[%s] In rs232_master_close send fail, return %d.\n", DEVICE_NAME, ret);
+				goto send_fail;
+			}
+			datalen_in_kern_buf -= ret;
+			unflush_index += ret;
+		}
+		unflush_index = 0;
 		if((ret = close_connection()) < 0) {
 			printk(KERN_ERR "close_connections fail, return %d.\n", ret);
 			goto close_connection_fail;
 		}
 	}
-	printk(KERN_INFO "[%s] close success\n", DEVICE_NAME);
 	device_ref_count--;
 	up(&device_mutex);
 	return 0;
 
 close_connection_fail:
+send_fail:
 	up(&device_mutex);
 down_interruptible_fail:
 	return ret;
@@ -286,7 +294,7 @@ static ssize_t rs232_master_write(struct file* filp, const char __user *buff, si
 	}
 	unflush_index = 0;
 	while(remain_len > 0) {
-		per_copy_len = 65535 - datalen_in_kern_buf;
+		per_copy_len = RS232_MASTER_BUF_SIZE - datalen_in_kern_buf;
 		if(per_copy_len > remain_len)
 			per_copy_len = remain_len;
 		if((copy_from_user(&kernel_buff[datalen_in_kern_buf], &buff[copied_len], per_copy_len)) < 0) {
@@ -299,7 +307,7 @@ static ssize_t rs232_master_write(struct file* filp, const char __user *buff, si
 		unflush_index += per_copy_len;
 		copied_len += per_copy_len;
 		/* If kernel buffer is full, send all the data to slave device and flush it */
-		if(65536 == datalen_in_kern_buf) {
+		if(RS232_MASTER_BUF_SIZE == datalen_in_kern_buf) {
 			while(datalen_in_kern_buf > 0) {
 				if((ret = send(client_socket, &kernel_buff[unflush_index], datalen_in_kern_buf)) < 0) {
 					printk(KERN_ERR "[%s] send fail, return %d.\n", DEVICE_NAME, ret);
@@ -330,7 +338,7 @@ static int rs232_master_mmap(struct file* filp, struct vm_area_struct* vma) {
 
 	size = (vma->vm_end - vma->vm_start);
 	/* Check whether virtual memory area size is larger to our kernel buffer */
-	if(size > 65536) {
+	if(size > RS232_MASTER_BUF_SIZE) {
 		ret = -EINVAL;
 		goto vma_size_error;
 	}
@@ -349,6 +357,57 @@ static int rs232_master_mmap(struct file* filp, struct vm_area_struct* vma) {
 making_page_table_fail:
 vma_size_error:
 	return ret;
+}
+
+static long rs232_master_ioctl(struct file* filp, unsigned int ioctl_num, unsigned long param) {
+	int ret;
+	size_t datalen;
+	size_t sended_len;
+	switch(ioctl_num) {
+	case IOCTL_SENDTOSLAVE:
+		/* Get a simple variable from user space */
+		if(get_user(datalen, (size_t __user *)param)) {
+			ret = -EFAULT;
+			printk(KERN_ERR "[%s] get_user fail, return %d.\n", DEVICE_NAME, ret);
+			goto get_user_fail;
+		}
+		/* Check whether data length is larger than device buffer size */
+		if(datalen > RS232_MASTER_BUF_SIZE) {
+			ret = -EINVAL;
+			goto datalen_error;
+		}
+		/* Lock critical section */
+		if(down_interruptible(&device_mutex)) {
+			ret = -ERESTARTSYS;
+			printk(KERN_ERR "[%s] In rs232_master_ioctl down_interruptible fail, return %d.\n", DEVICE_NAME, ret);
+			goto down_interruptible_fail;
+		}
+		/* Below is very similar to rs232_master_write */
+		datalen_in_kern_buf = datalen;
+		sended_len = 0;
+		while(datalen_in_kern_buf > 0) {
+			if((ret = send(client_socket, &kernel_buff[unflush_index], datalen_in_kern_buf)) < 0) {
+				printk(KERN_ERR "[%s] In rs232_master_ioctl send fail, return %d.\n", DEVICE_NAME, ret);
+				goto send_fail;
+			}
+			sended_len += ret;
+			datalen_in_kern_buf -= ret;
+			unflush_index += ret;
+		}
+		unflush_index = 0;
+		up(&device_mutex);
+		return (long)sended_len;
+	default:
+		return -ENOTTY;
+	}
+	return 0;
+
+send_fail:
+		up(&device_mutex);
+down_interruptible_fail:
+datalen_error:
+get_user_fail:
+		return ret;
 }
 
 static void vma_open(struct vm_area_struct* vma) {
