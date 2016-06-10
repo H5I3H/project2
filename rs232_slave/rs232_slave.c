@@ -13,7 +13,7 @@
 #include <asm/atomic.h>
 
 #define RS232_SLAVE_DATA_SIZE 65536
-#define RS232_SLAVE_CONNECT_PORT 9527
+#define RS232_SLAVE_CONNECT_PORT 9999
 
 #define RS232_SLAVE_IOC_MAGIC	's'  //  choose one number after consulting ioctl-number.txt
 #define RS232_SLAVE_OPENCONN	_IOW(RS232_SLAVE_IOC_MAGIC, 0, unsigned int)
@@ -50,7 +50,7 @@ static dev_t dev_no;
 static struct cdev cdev;
 
 
-static char *kernel_data; /* Allocate by kmalloc, free by kfree */
+static char * kernel_data; /* Allocate by kmalloc, free by kfree */
 static struct socket *conn_sock; /* connect kernel socket */
 static size_t data_len;
 static size_t unread_index;
@@ -62,10 +62,10 @@ DEFINE_SEMAPHORE(dev_mutex);
 static struct file_operations fops = {
         .owner = THIS_MODULE,
         .open = rs232_slave_open,
-        .release = rs232_slave_close
-        .llseek = rs232_slave_llseek
-        .unlocked_ioctl = rs232_slave_ioctl
-        .read = rs232_slave_read
+        .release = rs232_slave_close,
+        .llseek = rs232_slave_llseek,
+        .unlocked_ioctl = rs232_slave_ioctl,
+        .read = rs232_slave_read,
         .write = rs232_slave_write
 };
 
@@ -278,7 +278,7 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 			unread_index = 0;
 		}
 		read_len = (count < data_len? count : data_len);
-		if (copy_to_user( &buff[total], &data[unread_index], read_len)) {
+		if (copy_to_user( &buff[total], &kernel_data[unread_index], read_len)) {
 			printk(KERN_ERR "[rs232_slave] " "copy_to_user returned non-zero\n");
 			ret = -EFAULT;
 			up(&dev_mutex);
