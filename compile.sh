@@ -7,3 +7,5 @@ insmod ${master}.ko
 cd ${slave}
 make
 insmod ${slave}.ko
+
+
