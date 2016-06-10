@@ -13,6 +13,8 @@
 #include <asm/atomic.h>
 #include "rs232_slave.h"
 
+MODULE_LICENSE("GPL");
+
 #ifndef VM_RESERVED
 # define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
