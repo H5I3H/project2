@@ -1,0 +1,1 @@
+cmd_/home/dennis/Desktop/project2/rs232_slave/rs232_slave.ko := ld -r -m elf_x86_64 -T /home/dennis/linux-3.13.2/scripts/module-common.lds --build-id  -o /home/dennis/Desktop/project2/rs232_slave/rs232_slave.ko /home/dennis/Desktop/project2/rs232_slave/rs232_slave.o /home/dennis/Desktop/project2/rs232_slave/rs232_slave.mod.o
