@@ -11,15 +11,7 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <asm/atomic.h>
-
-#define RS232_SLAVE_DATA_SIZE 65536
-#define RS232_SLAVE_CONNECT_PORT 9999
-
-#define RS232_SLAVE_IOC_MAGIC	's'  //  choose one number after consulting ioctl-number.txt
-#define RS232_SLAVE_OPENCONN	_IOW(RS232_SLAVE_IOC_MAGIC, 0, unsigned int)
-#define RS232_SLAVE_CLOSECONN	_IO(RS232_SLAVE_IOC_MAGIC, 1)
-#define RS232_SLAVE_RECEIVEFROMMASTER	_IOW(RS232_SLAVE_IOC_MAGIC, 0, size_t)
-
+#include "rs232_slave.h"
 
 #ifndef VM_RESERVED
 # define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
@@ -158,42 +150,42 @@ static long rs232_slave_ioctl( struct file *filp, unsigned int ioctl_num, unsign
 	size_t receive_len;
 	switch(ioctl_num)
 	{
-		case RS232_SLAVE_OPENCONN:
+		case IOCTL_OPENCONN:
 			if (get_user(ip, (unsigned int __user *)ioctl_param)) {
-				printk(KERN_ERR "[rs232_slave] " "get_user returned non-zero\n");
+				printk(KERN_ERR "[%s] " "get_user returned non-zero\n", DEVICE_NAME);
 				ret = -EFAULT;
 				goto get_user_failed;
 			}
 			if (down_interruptible(&dev_mutex)) {
-				printk(KERN_ERR "[rs232_slave] " "down_interruptible returned non-zero\n");
+				printk(KERN_ERR "[%s] " "down_interruptible returned non-zero\n", DEVICE_NAME);
 				ret = -ERESTARTSYS;
 				goto down_interruptible_failed;
 			}
 			if ((ret = open_connection(ip)) < 0) {
-				printk(KERN_ERR "[rs232_slave] " "open_conn returned %d\n", ret);
+				printk(KERN_ERR "[%s] " "open_conn returned %d\n", DEVICE_NAME, ret);
 				up(&dev_mutex);
 				goto open_connection_failed;
             }
 			up(&dev_mutex);
 
                 return ret;
-		case RS232_SLAVE_CLOSECONN:
+		case IOCTL_CLOSECONN:
 			if (down_interruptible(&dev_mutex)) {
-				printk(KERN_ERR "[rs232_slave] " "down_interruptible returned non-zero\n");
+				printk(KERN_ERR "[%s] " "down_interruptible returned non-zero\n", DEVICE_NAME);
 				ret = -ERESTARTSYS;
 				goto down_interruptible_failed;
 			}
 			if ((ret = close_connection()) < 0) {
-				printk(KERN_ERR "[rs232_slave] " "close_conn returned %d\n", ret);
+				printk(KERN_ERR "[%s] " "close_conn returned %d\n", DEVICE_NAME, ret);
 				up(&dev_mutex);
 				goto close_connection_failed;
 			}
 			up(&dev_mutex);
 
 			return ret;
-		case RS232_SLAVE_RECEIVEFROMMASTER:
+		case IOCTL_RECEIVEFROMMASTER:
 			if (get_user(receive_len, (size_t __user *)ioctl_param)) {
-					printk(KERN_ERR "[rs232_slave] " "get_user returned non-zero\n");
+					printk(KERN_ERR "[%s] " "get_user returned non-zero\n", DEVICE_NAME);
 					ret = -EFAULT;
 					goto get_user_failed;
 			}
@@ -202,7 +194,7 @@ static long rs232_slave_ioctl( struct file *filp, unsigned int ioctl_num, unsign
 				 goto receive_len_error;
 			}
 			if (down_interruptible(&dev_mutex)) {
-				printk(KERN_ERR "[rs232_slave] " "down_interruptible returned non-zero\n");
+				printk(KERN_ERR "[%s] " "down_interruptible returned non-zero\n", DEVICE_NAME);
 					ret = -ERESTARTSYS;
 					goto down_interruptible_failed;
 			}
@@ -214,7 +206,7 @@ static long rs232_slave_ioctl( struct file *filp, unsigned int ioctl_num, unsign
 			while (data_len < receive_len) {
 				if ((ret = receive_from_master( conn_sock, &kernel_data[data_len], receive_len - data_len)) < 0) 
 				{
-					printk(KERN_ERR "[rs232_slave] " "receive_from_master returned %d\n", ret);
+					printk(KERN_ERR "[%s] " "receive_from_master returned %d\n", DEVICE_NAME, ret);
 					up(&dev_mutex);
 					goto receive_from_master_failed;
 				}  else if (ret == 0) {
@@ -250,7 +242,7 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 	int is_eof;
 
 	if (down_interruptible(&dev_mutex)) {
-		printk(KERN_ERR "[rs232_slave] " "down_interruptible returned non-zero\n");
+		printk(KERN_ERR "[%s] " "down_interruptible returned non-zero\n", DEVICE_NAME);
 		ret = -ERESTARTSYS;
 		goto down_interruptible_failed;
 	}
@@ -266,7 +258,7 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 					conn_sock,
 					&kernel_data[data_len],
 					RS232_SLAVE_DATA_SIZE - data_len)) < 0) {
-					printk(KERN_ERR "[rs232_slave] " "receive_from_master returned %d\n", ret);
+					printk(KERN_ERR "[%s] " "receive_from_master returned %d\n", DEVICE_NAME, ret);
 					up(&dev_mutex);
 					goto receive_from_master_failed;
 				} else if (ret == 0) {
@@ -279,7 +271,7 @@ static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t co
 		}
 		read_len = (count < data_len? count : data_len);
 		if (copy_to_user( &buff[total], &kernel_data[unread_index], read_len)) {
-			printk(KERN_ERR "[rs232_slave] " "copy_to_user returned non-zero\n");
+			printk(KERN_ERR "[%s] " "copy_to_user returned non-zero\n", DEVICE_NAME);
 			ret = -EFAULT;
 			up(&dev_mutex);
 			goto copy_to_user_failed;
@@ -324,7 +316,7 @@ static int open_connection(unsigned int ip)
 	/* create conn_sock with SO_REUSEADDR set */
 	if ((ret = sock_create_kern( AF_INET, SOCK_STREAM, IPPROTO_TCP, &conn_sock)) < 0) 
 	{
-		printk(KERN_ERR "[rs232_slave] " "sock_create_kern returned %d\n", ret);
+		printk(KERN_ERR "[%s] " "sock_create_kern returned %d\n", DEVICE_NAME, ret);
 		goto sock_create_kern_failed;
 	}
 	option = 1;
@@ -334,7 +326,7 @@ static int open_connection(unsigned int ip)
 		SO_REUSEADDR,
 		(char *)&option,
 		sizeof(option))) < 0) {
-			printk(KERN_ERR "[rs232_slave] " "kernel_sock_setsockopt returned %d\n", ret);
+			printk(KERN_ERR "[%s] " "kernel_sock_setsockopt returned %d\n", DEVICE_NAME, ret);
 			goto kernel_setsockopt_failed;
 	}
 
@@ -345,7 +337,7 @@ static int open_connection(unsigned int ip)
 	saddr.sin_addr.s_addr = htonl(ip);
 	if ((ret = conn_sock->ops->connect(
 		conn_sock, (struct sockaddr *)&saddr, sizeof(saddr), 0)) < 0) {
-		printk(KERN_ERR "[rs232_slave] " "conn_sock->ops->connect returned %d\n", ret);
+		printk(KERN_ERR "[%s] " "conn_sock->ops->connect returned %d\n", DEVICE_NAME, ret);
 		goto connect_failed;
 	}
 	/* mark the device as ready */
