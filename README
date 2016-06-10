@@ -1,0 +1,9 @@
+I have improve the efficiency of mmap method in test_slave.c and test_master.c
+But fcntl is still faster than mmap and I haven't figure it out.
+
+Note for the new added files(it's just for testing the efficient):
+test.txt is the test case I use
+run_master.sh run master 10 time
+run_slave.sh run slave 10 time and return the average time of fcntl and mmap
+
+You should run run_master.sh first and then run run_slave.sh
