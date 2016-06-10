@@ -4,7 +4,7 @@ if [ $# -eq 0 ] || [ $# -ge 3 ]; then
 else
 	echo "Both slave and master use mmap"
 	temp=0
-	for count in {1..10}i
+	for count in {1..10}
 	do
 		temp=${temp}+$(./slave ${1} mmap ${2} | awk '{print $3}')
 	done
