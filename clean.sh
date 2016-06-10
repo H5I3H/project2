@@ -4,6 +4,6 @@ slave=rs232_slave
 cd ${master}
 make clean
 rmmod ${master}
-cd ${slave}
+cd ../${slave}
 make clean
 rmmod ${slave}

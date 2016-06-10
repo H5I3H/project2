@@ -4,7 +4,7 @@ slave=rs232_slave
 cd ${master}
 make
 insmod ${master}.ko
-cd ${slave}
+cd ../${slave}
 make
 insmod ${slave}.ko
 
