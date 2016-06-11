@@ -29,7 +29,10 @@ static loff_t rs232_slave_llseek( struct file *filp, loff_t off, int whence );
 static long rs232_slave_ioctl( struct file *filp, unsigned int ioctl_num, unsigned long ioctl_param );
 static ssize_t rs232_slave_read( struct file *filp, char __user *buff, size_t count, loff_t *offp );
 static ssize_t rs232_slave_write( struct file *filp, const char __user *buff, size_t count, loff_t *offp );
-//static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma );
+static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma );
+
+static void vma_open( struct vm_area_struct *vma );
+static void vma_close( struct vm_area_struct *vma );
 
 /* connection (should be called while holding dev_mutex) */
 static int open_connection(unsigned int ip);
@@ -60,8 +63,13 @@ static struct file_operations fops = {
         .llseek = rs232_slave_llseek,
         .unlocked_ioctl = rs232_slave_ioctl,
         .read = rs232_slave_read,
-        .write = rs232_slave_write
+        .write = rs232_slave_write,
+        .mmap = rs232_slave_mmap
 };
+static struct vm_operations_struct vmops = {
+	.open = vma_open,
+	.close = vma_close,
+};	
 
 /* module entry/exit points */
 static int __init rs232_slave_init(void)
@@ -309,6 +317,65 @@ static ssize_t rs232_slave_write( struct file *filp, const char __user *buff, si
 	 return 0;
 }
 
+static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma )
+{
+	int ret;
+	unsigned long size;
+	int i;
+	struct page *page;
+	unsigned char *tmp_cp;
+	char buf[256];
+	size_t len;
+	int end_pfn;
+	int pfn;
+
+	size = (vma->vm_end - vma->vm_start);
+	if (size > RS232_SLAVE_DATA_SIZE ) {
+		ret = -EINVAL;
+		goto size_error;
+	}
+	vma->vm_pgoff = __pa(kernel_data) >> PAGE_SHIFT;
+	if ( remap_pfn_range( vma, vma->vm_start, vma->vm_pgoff, size,  vma->vm_page_prot )) {
+		ret = -EAGAIN;
+		goto remap_pfn_range_failed;
+	}
+	vma->vm_ops = &vmops;
+	vma->vm_flags |= VM_RESERVED;
+
+	pfn = vma->vm_pgoff;
+	end_pfn = pfn + (size >> PAGE_SHIFT);
+	for (; pfn < end_pfn; ++pfn) {
+		page = pfn_to_page(pfn);
+		tmp_cp = (unsigned char *)page;
+		len = 0;
+		for (i = 0; i < sizeof(struct page); ++i) {
+			ret = snprintf(&buf[len], sizeof(buf) - len, "%02x", tmp_cp[i]);
+			len += ret;
+		}
+		buf[len] = '\0';
+		printk(KERN_INFO "[%s] " "(pfn = %d) %s\n", DEVICE_NAME, pfn, buf);
+	}
+	vma_open(vma);
+
+	return 0;
+/*Error handling*/
+size_error:
+remap_pfn_range_failed:
+
+	return ret;
+}
+
+static void vma_open( struct vm_area_struct *vma )
+{
+	printk(KERN_INFO "[%s] vma open, virt %lx, phys %lx.\n", DEVICE_NAME, vma->vm_start, 
+			vma->vm_pgoff << PAGE_SHIFT);
+	return;
+}
+
+static void vma_close( struct vm_area_struct *vma )
+{
+	return;
+}
 static int open_connection(unsigned int ip)
 {
 	int ret;
