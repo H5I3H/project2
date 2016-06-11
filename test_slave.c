@@ -124,42 +124,36 @@ static void do_mmap(void)
     void *bufin, *bufout;
     void *temp;
 
-        if ((bufin = mmap(0,
-                          RS232_SLAVE_DATA_SIZE,
-                          PROT_READ,
-                          MAP_SHARED,
-                          fdin,
-                          0)) == MAP_FAILED) {
-                perror("mmap");
-                exit(1);
-        }
+    if ((bufin = mmap(0, RS232_SLAVE_DATA_SIZE, PROT_READ, MAP_SHARED, fdin, 0)) == MAP_FAILED) {
+        perror("mmap read fail");
+        exit(1);
+    }
 
-        size = RS232_SLAVE_DATA_SIZE;
-        off = 0;
-		ret = ioctl(fdin, IOCTL_RECEIVEFROMMASTER, &size);
-		if(ftruncate(fdout, off + ret) < 0) {
-			perror("lseek");
-			exit(1);
-		}
-		if((bufout = mmap(0, ret, PROT_WRITE, MAP_SHARED, fdout, off)) == MAP_FAILED) {
-			perror("mmap");
-			exit(1);
-		}
-		memcpy(bufout, bufin, ret);
-		off += ret;
-        while ((ret = ioctl(fdin, IOCTL_RECEIVEFROMMASTER, &size)) > 0) {
-                if (ftruncate(fdout, off + ret) < 0) {
-                        perror("lseek");
-                        exit(1);
-                }
-				if((bufout = mremap(bufout, off, off + ret, MREMAP_MAYMOVE)) == MAP_FAILED) {
-					perror("mremap");
-					exit(1);
-				}
-                memcpy(&bufout[off], bufin, ret);
-
-                off += ret;
+    size = RS232_SLAVE_DATA_SIZE;
+    off = 0;
+    ret = ioctl(fdin, IOCTL_RECEIVEFROMMASTER, &size);
+    if(ftruncate(fdout, off + ret) < 0) {
+		perror("lseek fail");
+		exit(1);
+	}
+	if((bufout = mmap(0, ret, PROT_WRITE, MAP_SHARED, fdout, off)) == MAP_FAILED) {
+		perror("mmap write fail");
+		exit(1);
+	}
+	memcpy(bufout, bufin, ret);
+	off += ret;
+    while ((ret = ioctl(fdin, IOCTL_RECEIVEFROMMASTER, &size)) > 0) {
+        if (ftruncate(fdout, off + ret) < 0) {
+            perror("lseek");
+            exit(1);
         }
-		munmap(bufout, off);
-        munmap(bufin, RS232_SLAVE_DATA_SIZE);
+        if((bufout = mremap(bufout, off, off + ret, MREMAP_MAYMOVE)) == MAP_FAILED) {
+            perror("mremap fail");
+            exit(1);
+        }
+        memcpy(&bufout[off], bufin, ret);
+        off += ret;
+    }
+	munmap(bufout, off);
+    munmap(bufin, RS232_SLAVE_DATA_SIZE);
 }
