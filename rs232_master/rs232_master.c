@@ -6,8 +6,11 @@
 #include <linux/cdev.h>
 #include <linux/slab.h> /* kmalloc, kfree */
 #include <linux/net.h>
+#include <linux/mm.h>
 #include <net/sock.h>
 #include <net/tcp.h>
+#include <asm/pgtable.h>
+#include <asm/page.h>
 #include "rs232_master.h"
 
 #ifndef VM_RESERVED
@@ -336,6 +339,13 @@ static int rs232_master_mmap(struct file* filp, struct vm_area_struct* vma) {
 	int ret;
 	unsigned long size;
 
+	/*struct mm_struct* mm;
+	pgd_t* pgd;
+	pmd_t* pmd;
+	pud_t* pud;
+	pte_t* pte;
+	int i = 0;*/
+
 	size = (vma->vm_end - vma->vm_start);
 	/* Check whether virtual memory area size is larger to our kernel buffer */
 	if(size > RS232_MASTER_BUF_SIZE) {
@@ -352,6 +362,16 @@ static int rs232_master_mmap(struct file* filp, struct vm_area_struct* vma) {
 	}
 	
 	vma_open(vma);
+	/*mm = vma->vm_mm;
+	for(i = 0;;i++) {
+		pgd = pgd_offset(mm, vma->vm_start + 4096 * i);
+		pud = pud_offset(pgd, vma->vm_start + 4096 * i);
+		pmd = pmd_offset(pud, vma->vm_start + 4096 * i);
+		pte = pte_offset_kernel(pmd, vma->vm_start + 4096 * i);
+		if(pte_none(*pte))
+			break;
+		printk(KERN_INFO "%lx\n", pte_val(*pte));
+	}*/
 	return 0;
 
 making_page_table_fail:

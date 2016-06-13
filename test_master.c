@@ -93,10 +93,7 @@ static void do_mmap(void) {
 		perror("mmap fail");
 		exit(1);
 	}
-	//while(off < end_off) {
 	size = (size_t)(end_off - off);
-		//if(RS232_MASTER_BUF_SIZE < size)
-		//	size = RS232_MASTER_BUF_SIZE;
 	if((bufin = mmap(0, size, PROT_READ, MAP_SHARED, fdin, 0)) == MAP_FAILED) {
 		perror("mmap fail");
 		exit(1);
@@ -113,10 +110,6 @@ static void do_mmap(void) {
 		off += send_len;
 		total_byte += send_len;
 	}
-	//munmap(bufin, size);
-	//off += size;
-	//total_byte += size;
-	//}
 	munmap(bufin, size);
 	munmap(bufdev, RS232_MASTER_BUF_SIZE);
 }

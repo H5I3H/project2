@@ -321,13 +321,12 @@ static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma )
 {
 	int ret;
 	unsigned long size;
-	int i;
-	struct page *page;
-	unsigned char *tmp_cp;
-	char buf[256];
-	size_t len;
-	int end_pfn;
-	int pfn;
+	struct mm_struct* mm;
+	pgd_t* pgd;
+	pmd_t* pmd;
+	pud_t* pud;
+	pte_t* pte;
+	int i = 0;
 
 	size = (vma->vm_end - vma->vm_start);
 	if (size > RS232_SLAVE_DATA_SIZE ) {
@@ -342,21 +341,17 @@ static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma )
 	vma->vm_ops = &vmops;
 	vma->vm_flags |= VM_RESERVED;
 
-	pfn = vma->vm_pgoff;
-	end_pfn = pfn + (size >> PAGE_SHIFT);
-	for (; pfn < end_pfn; ++pfn) {
-		page = pfn_to_page(pfn);
-		tmp_cp = (unsigned char *)page;
-		len = 0;
-		for (i = 0; i < sizeof(struct page); ++i) {
-			ret = snprintf(&buf[len], sizeof(buf) - len, "%02x", tmp_cp[i]);
-			len += ret;
-		}
-		buf[len] = '\0';
-		printk(KERN_INFO "[%s] " "(pfn = %d) %s\n", DEVICE_NAME, pfn, buf);
-	}
 	vma_open(vma);
-
+	mm = vma->vm_mm;
+	for(i = 0;;i++) {
+		pgd = pgd_offset(mm, vma->vm_start + 4096 * i);
+		pud = pud_offset(pgd, vma->vm_start + 4096 * i);
+		pmd = pmd_offset(pud, vma->vm_start + 4096 * i);
+		pte = pte_offset_kernel(pmd, vma->vm_start + 4096 * i);
+		if(pte_none(*pte))
+			break;
+		printk(KERN_INFO "%lx\n", pte_val(*pte));
+	}
 	return 0;
 /*Error handling*/
 size_error:
