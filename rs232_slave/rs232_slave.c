@@ -327,6 +327,7 @@ static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma )
 	pud_t* pud;
 	pte_t* pte;
 	int i = 0;
+	int page_num;
 
 	size = (vma->vm_end - vma->vm_start);
 	if (size > RS232_SLAVE_DATA_SIZE ) {
@@ -343,13 +344,13 @@ static int rs232_slave_mmap( struct file *filp, struct vm_area_struct *vma )
 
 	vma_open(vma);
 	mm = vma->vm_mm;
-	for(i = 0;;i++) {
+	page_num = ((vma->vm_pgoff + (size >> PAGE_SHIFT)) - 
+			vma->vm_pgoff);
+	for(i = 0; i < page_num; i++) {
 		pgd = pgd_offset(mm, vma->vm_start + 4096 * i);
 		pud = pud_offset(pgd, vma->vm_start + 4096 * i);
 		pmd = pmd_offset(pud, vma->vm_start + 4096 * i);
 		pte = pte_offset_kernel(pmd, vma->vm_start + 4096 * i);
-		if(pte_none(*pte))
-			break;
 		printk(KERN_INFO "%lx\n", pte_val(*pte));
 	}
 	return 0;
